@@ -1,0 +1,97 @@
+# Copyright 2020 Google LLC
+ARG parent_image
+FROM $parent_image
+
+# ==========================================
+# 1. 代理与依赖
+# ==========================================
+ENV http_proxy=http://192.168.21.1:7890
+ENV https_proxy=http://192.168.21.1:7890
+
+RUN apt-get update && \
+    apt-get install -y \
+    wget git make \
+    clang-10 llvm-10 llvm-10-dev \
+    libc++-dev libc++abi-dev \
+    pkg-config libtool automake autoconf \
+    && rm -rf /var/lib/apt/lists/*
+
+# ==========================================
+# 2. 环境标准化
+# ==========================================
+RUN rm -rf /usr/local/include/llvm && \
+    rm -f /usr/local/bin/llvm-config && \
+    rm -f /usr/local/bin/clang* && \
+    ln -sf /usr/bin/clang-10 /usr/bin/clang && \
+    ln -sf /usr/bin/clang++-10 /usr/bin/clang++ && \
+    ln -sf /usr/bin/llvm-config-10 /usr/bin/llvm-config && \
+    ln -sf /usr/bin/llvm-ar-10 /usr/bin/llvm-ar && \
+    ln -sf /usr/bin/llvm-as-10 /usr/bin/llvm-as && \
+    ln -sf /usr/bin/llvm-link-10 /usr/bin/llvm-link
+
+# ==========================================
+# 3. 拉取源码
+# ==========================================
+RUN git clone https://github.com/puppet-meteor/MOpt-AFL /afl && \
+    cd /afl && \
+    git checkout 45b9f38d2d8b699fd571cfde1bf974974339a21e
+
+# ==========================================
+# 4. 编译 MOpt
+# ==========================================
+RUN cd /afl/MOpt && \
+    CC=clang CXX=clang++ AFL_NO_X86=1 make && \
+    cd llvm_mode && \
+    # 编译 Wrapper
+    clang-10 -O3 -Wall -g -Wno-pointer-sign \
+      -DAFL_PATH=\"/afl/MOpt\" -DBIN_PATH=\"/usr/bin\" -DVERSION=\"2.52b\" \
+      afl-clang-fast.c -o afl-clang-fast && \
+    # 编译 Pass
+    clang++-10 -O3 -funroll-loops -fno-rtti -fPIC -shared \
+      -I/usr/lib/llvm-10/include \
+      afl-llvm-pass.so.cc -o afl-llvm-pass.so && \
+    # 编译 Runtime
+    clang-10 -O3 -fPIC -fno-omit-frame-pointer -g -c \
+      afl-llvm-rt.o.c -o afl-llvm-rt.o && \
+    # 链接
+    ln -sf afl-clang-fast afl-clang-fast++ && \
+    # -------------------------------------------------------------------
+    # (G) 归位与兼容性修复 (关键修改)
+    # -------------------------------------------------------------------
+    # 1. 编译器放到系统目录
+    cp afl-clang-fast /usr/bin/afl-clang-fast && \
+    cp afl-clang-fast++ /usr/bin/afl-clang-fast++ && \
+    # 2. 插件和运行时放回 AFL_PATH
+    cp afl-llvm-pass.so /afl/MOpt/afl-llvm-pass.so && \
+    cp afl-llvm-rt.o /afl/MOpt/afl-llvm-rt.o && \
+    # 3. 【核心修复】创建软链接，欺骗 fuzzer.py
+    # 程序去 /afl/afl-fuzz 找时，实际会指向 /afl/MOpt/afl-fuzz
+    ln -sf /afl/MOpt/afl-fuzz /afl/afl-fuzz && \
+    ln -sf /afl/MOpt/afl-showmap /afl/afl-showmap && \
+    ln -sf /afl/MOpt/afl-tmin /afl/afl-tmin && \
+    ln -sf /afl/MOpt/afl-gotcpu /afl/afl-gotcpu && \
+    # 4. FuzzBench 标准位置
+    cp /afl/MOpt/afl-fuzz /usr/bin/fuzz
+
+# ==========================================
+# 5. 编译 Driver
+# ==========================================
+RUN cd /afl/MOpt && \
+    wget https://raw.githubusercontent.com/llvm/llvm-project/5feb80e748924606531ba28c97fe65145c65372e/compiler-rt/lib/fuzzer/afl/afl_driver.cpp -O /afl/MOpt/afl_driver.cpp && \
+    clang-10 -Wno-pointer-sign -c -o /afl/MOpt/afl-llvm-rt.o /afl/MOpt/llvm_mode/afl-llvm-rt.o.c -I/afl/MOpt && \
+    clang++-10 -stdlib=libc++ -std=c++11 -O2 -c -o /afl/MOpt/afl_driver.o /afl/MOpt/afl_driver.cpp && \
+    ar r /libAFL.a /afl/MOpt/afl_driver.o /afl/MOpt/afl-llvm-rt.o
+
+# ==========================================
+# 6. 环境变量
+# ==========================================
+ENV AFL_PATH=/afl/MOpt
+ENV CC=/usr/bin/afl-clang-fast
+ENV CXX=/usr/bin/afl-clang-fast++
+ENV AFL_LLVM_MODE=1
+ENV FUZZER_LIB=/libAFL.a
+ENV LIB_FUZZING_ENGINE=/libAFL.a
+
+# 清除代理
+ENV http_proxy=""
+ENV https_proxy=""

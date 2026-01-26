@@ -1,0 +1,26 @@
+# 实验次数 (建议先设为 2 次，节省资源)
+trials: 1
+
+# 每次实验运行时间 (单位：秒)
+# 建议先设为 600 (10分钟)，验证流程跑通后再加长
+max_total_time: 3600
+
+# 采样频率：每 15 分钟 (900秒) 记录一次数据
+snapshot_period: 600
+
+# Docker 仓库地址 (本地实验通常忽略此项，但保持默认即可)
+docker_registry: gcr.io/fuzzbench
+
+# 实验数据存储路径 (一定要用绝对路径)
+# 我们把它放在你的 fuzzbench 目录下，方便管理
+experiment_filestore: /home/x/fuzzbench/experiment-data
+
+# 报告存储路径
+report_filestore: /home/x/fuzzbench/report-data
+
+# 标记为本地实验
+local_experiment: true
+
+# === [关键新增] 显式启用覆盖率测量 ===
+measurers:
+  - coverage
