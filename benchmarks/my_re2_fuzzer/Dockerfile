@@ -19,12 +19,12 @@ FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d
 # ==========================================
 # 1. 网络配置 (只加代理和换源)
 # ==========================================
-ENV http_proxy=http://192.168.21.1:7890
-ENV https_proxy=http://192.168.21.1:7890
+ENV http_proxy=http://172.17.0.1:7890
+ENV https_proxy=http://172.17.0.1:7890
 
 # 换阿里云源
-RUN echo 'Acquire::http::Proxy "http://192.168.21.1:7890";' > /etc/apt/apt.conf.d/99proxy && \
-    echo 'Acquire::https::Proxy "http://192.168.21.1:7890";' >> /etc/apt/apt.conf.d/99proxy && \
+RUN echo 'Acquire::http::Proxy "http://172.17.0.1:7890";' > /etc/apt/apt.conf.d/99proxy && \
+    echo 'Acquire::https::Proxy "http://172.17.0.1:7890";' >> /etc/apt/apt.conf.d/99proxy && \
     sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
@@ -40,8 +40,8 @@ RUN echo 'Acquire::http::Proxy "http://192.168.21.1:7890";' > /etc/apt/apt.conf.
 # ==========================================
 # 2. 拉取源码 (配合原版 build.sh)
 # ==========================================
-RUN git config --global http.proxy http://192.168.21.1:7890 && \
-    git config --global https.proxy http://192.168.21.1:7890
+RUN git config --global http.proxy http://172.17.0.1:7890 && \
+    git config --global https.proxy http://172.17.0.1:7890
 
 # 【关键】这里我必须加上 git checkout 2023-06-01
 # 原因：原版 build.sh 依赖 'make'。

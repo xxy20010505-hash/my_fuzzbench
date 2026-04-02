@@ -15,8 +15,8 @@
 FROM gcr.io/fuzzbench/base-image
 
 # 必须再次设置代理，因为 Runner 构建是独立的阶段
-ENV http_proxy=http://192.168.21.1:7890
-ENV https_proxy=http://192.168.21.1:7890
+ENV http_proxy=http://172.17.0.1:7890
+ENV https_proxy=http://172.17.0.1:7890
 
 # 安装运行时缺失的库：libc++1 和 libc++abi1
 RUN apt-get update && apt-get install -y \

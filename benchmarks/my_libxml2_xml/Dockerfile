@@ -20,8 +20,8 @@ FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d
 # ==========================================
 # 1. 代理与基础依赖
 # ==========================================
-ENV http_proxy=http://192.168.21.1:7890
-ENV https_proxy=http://192.168.21.1:7890
+ENV http_proxy=http://172.17.0.1:7890
+ENV https_proxy=http://172.17.0.1:7890
 
 # 安装构建依赖
 # 【重点】加入了 gnome-common (autogen.sh 依赖它)
@@ -44,8 +44,8 @@ RUN curl -LO http://mirrors.kernel.org/ubuntu/pool/main/a/automake-1.16/automake
 # 【关键修复】
 # 1. 明确指定克隆到 /src/libxml2
 # 2. 切换到 tag v2.9.14 (保证 autogen.sh 肯定存在，master 分支可能已经换成 cmake 了)
-RUN git config --global http.proxy http://192.168.21.1:7890 && \
-    git config --global https.proxy http://192.168.21.1:7890 && \
+RUN git config --global http.proxy http://172.17.0.1:7890 && \
+    git config --global https.proxy http://172.17.0.1:7890 && \
     git clone --depth 1 --branch v2.9.14 https://gitlab.gnome.org/GNOME/libxml2.git /src/libxml2 && \
     git config --global --unset http.proxy && \
     git config --global --unset https.proxy

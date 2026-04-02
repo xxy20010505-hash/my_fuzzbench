@@ -18,8 +18,8 @@ FROM $parent_image
 # Download and compile AFL v2.57b.
 # Set AFL_NO_X86 to skip flaky tests.
 # 【修改点1】Git Clone 代理
-RUN git config --global http.proxy http://192.168.21.1:7890 && \
-    git config --global https.proxy http://192.168.21.1:7890 && \
+RUN git config --global http.proxy http://172.17.0.1:7890 && \
+    git config --global https.proxy http://172.17.0.1.1:7890 && \
     git clone \
         --depth 1 \
         --branch v2.57b \

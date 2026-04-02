@@ -5,8 +5,8 @@ FROM $parent_image
 # ==========================================
 # 1. 代理与依赖
 # ==========================================
-ENV http_proxy=http://192.168.21.1:7890
-ENV https_proxy=http://192.168.21.1:7890
+ENV http_proxy=http://172.17.0.1:7890
+ENV https_proxy=http://172.17.0.1:7890
 
 RUN apt-get update && \
     apt-get install -y \
