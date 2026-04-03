@@ -5,8 +5,8 @@ FROM gcr.io/fuzzbench/base-image
 # ==========================================
 RUN echo 'Acquire::http::Proxy "http://172.17.0.1:7897";' > /etc/apt/apt.conf.d/proxy.conf && \
     echo 'Acquire::https::Proxy "http://172.17.0.1:7897";' >> /etc/apt/apt.conf.d/proxy.conf && \
-    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    #sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    #sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
     # [关键修复步骤 START] ---------------------------------
     # 1. 安装 add-apt-repository 工具
