@@ -6,7 +6,7 @@ trials: 1
 max_total_time: 600
 
 # 采样频率：每 15 分钟 (900秒) 记录一次数据
-snapshot_period: 600
+snapshot_period: 60
 
 # Docker 仓库地址 (本地实验通常忽略此项，但保持默认即可)
 docker_registry: gcr.io/fuzzbench
@@ -20,3 +20,10 @@ report_filestore: /home/x/fuzzbench/report-data
 
 # 标记为本地实验
 local_experiment: true
+
+# 你的机器有 28 核，并行 14 个 Fuzzer 是最安全的极限，剩下的核心留给 OS 和 IO 调度
+concurrent_trials: 10
+
+# 报告生成阶段极其吃内存和 CPU，严格限制在 4 并发
+concurrent_builds: 4
+concurrent_coverage_runs: 4
