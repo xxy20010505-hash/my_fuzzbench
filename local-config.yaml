@@ -20,10 +20,3 @@ report_filestore: /home/x/fuzzbench/report-data
 
 # 标记为本地实验
 local_experiment: true
-
-# 你的机器有 28 核，并行 14 个 Fuzzer 是最安全的极限，剩下的核心留给 OS 和 IO 调度
-concurrent_trials: 10
-
-# 报告生成阶段极其吃内存和 CPU，严格限制在 4 并发
-concurrent_builds: 4
-concurrent_coverage_runs: 4
