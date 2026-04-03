@@ -20,8 +20,8 @@ FROM gcr.io/fuzzbench/base-image
 # 1. 配置 APT 代理 (写入配置文件比 ENV 更稳定)
 # 2. 替换为阿里云源 (解决 502 Bad Gateway 问题)
 # 3. 安装依赖 (保留了你原来的列表)
-RUN echo 'Acquire::http::Proxy "http://192.168.21.1:7890";' > /etc/apt/apt.conf.d/99proxy && \
-    echo 'Acquire::https::Proxy "http://192.168.21.1:7890";' >> /etc/apt/apt.conf.d/99proxy && \
+RUN echo 'Acquire::http::Proxy "http://192.168.21.1:7897";' > /etc/apt/apt.conf.d/99proxy && \
+    echo 'Acquire::https::Proxy "http://192.168.21.1:7897";' >> /etc/apt/apt.conf.d/99proxy && \
     sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \

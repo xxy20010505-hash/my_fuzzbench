@@ -18,8 +18,8 @@ FROM $parent_image
 # Download and compile AFL v2.57b.
 # Set AFL_NO_X86 to skip flaky tests.
 # 【修改点1】Git Clone 代理
-RUN git config --global http.proxy http://172.17.0.1:7890 && \
-    git config --global https.proxy http://172.17.0.1.1:7890 && \
+RUN git config --global http.proxy http://172.17.0.1:7897 && \
+    git config --global https.proxy http://172.17.0.1.1:7897 && \
     git clone \
         --depth 1 \
         --branch v2.57b \
@@ -34,7 +34,7 @@ RUN git config --global http.proxy http://172.17.0.1:7890 && \
 # 我们在 wget 前面加上 https_proxy=... 临时环境变量
 RUN apt-get update && \
     apt-get install wget -y && \
-    https_proxy=http://192.168.21.1:7890 wget https://raw.githubusercontent.com/llvm/llvm-project/5feb80e748924606531ba28c97fe65145c65372e/compiler-rt/lib/fuzzer/afl/afl_driver.cpp -O /afl/afl_driver.cpp && \
+    https_proxy=http://172.17.0.1.1:7897 wget https://raw.githubusercontent.com/llvm/llvm-project/5feb80e748924606531ba28c97fe65145c65372e/compiler-rt/lib/fuzzer/afl/afl_driver.cpp -O /afl/afl_driver.cpp && \
     clang -Wno-pointer-sign -c /afl/llvm_mode/afl-llvm-rt.o.c -I/afl && \
     clang++ -stdlib=libc++ -std=c++11 -O2 -c /afl/afl_driver.cpp && \
     ar r /libAFL.a *.o

@@ -19,13 +19,13 @@ FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d
 # ==========================================
 # 1. 代理与依赖 (阿里云源 + 补全 pkg-config)
 # ==========================================
-ENV http_proxy=http://172.17.0.1:7890
-ENV https_proxy=http://172.17.0.1:7890
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
 
 # 换源并安装依赖
 # 增加 pkg-config，这对 autoconf/autogen.sh 非常关键
-RUN echo 'Acquire::http::Proxy "http://172.17.0.1:7890";' > /etc/apt/apt.conf.d/99proxy && \
-    echo 'Acquire::https::Proxy "http://172.17.0.1:7890";' >> /etc/apt/apt.conf.d/99proxy && \
+RUN echo 'Acquire::http::Proxy "http://172.17.0.1:7897";' > /etc/apt/apt.conf.d/99proxy && \
+    echo 'Acquire::https::Proxy "http://172.17.0.1:7897";' >> /etc/apt/apt.conf.d/99proxy && \
     sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
@@ -41,8 +41,8 @@ RUN echo 'Acquire::http::Proxy "http://172.17.0.1:7890";' > /etc/apt/apt.conf.d/
 # ==========================================
 # 2. Git 配置 (防断连)
 # ==========================================
-RUN git config --global http.proxy http://172.17.0.1:7890 && \
-    git config --global https.proxy http://172.17.0.1:7890 && \
+RUN git config --global http.proxy http://172.17.0.1:7897 && \
+    git config --global https.proxy http://172.17.0.1:7897 && \
     git config --global http.version HTTP/1.1 && \
     git config --global http.postBuffer 524288000
 

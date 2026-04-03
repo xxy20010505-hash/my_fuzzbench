@@ -19,8 +19,8 @@ FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d
 # ==========================================
 # 1. 基础依赖 (保持不变)
 # ==========================================
-ENV http_proxy=http://172.17.0.1:7890
-ENV https_proxy=http://172.17.0.1:7890
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
 
 RUN apt-get update && \
     apt-get upgrade -y && \
@@ -39,8 +39,8 @@ RUN apt-get update && \
 # 2. 拉取源码 (针对性修复)
 # ==========================================
 # 配置 Git 代理
-RUN git config --global http.proxy http://172.17.0.1:7890 && \
-    git config --global https.proxy http://172.17.0.1:7890 && \
+RUN git config --global http.proxy http://172.17.0.1:7897 && \
+    git config --global https.proxy http://172.17.0.1:7897 && \
     # 【核心修复 1】强制使用 HTTP/1.1，解决 "curl 16 Error in the HTTP2 framing layer"
     git config --global http.version HTTP/1.1 && \
     # 【核心修复 2】增大缓存区，防止大文件传输中断

@@ -19,8 +19,8 @@ FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d
 # ==========================================
 # 1. 代理与依赖安装
 # ==========================================
-ENV http_proxy=http://172.17.0.1:7890
-ENV https_proxy=http://172.17.0.1:7890
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
 
 # 关键修改：
 # 1. 加入 'zip'：后续生成种子库需要用到 zip 命令，基础镜像可能不带。

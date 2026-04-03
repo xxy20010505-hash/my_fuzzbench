@@ -28,8 +28,8 @@ RUN rm -rf /usr/local/include/llvm && \
 # 3. 拉取源码 (改用绝对路径，不切换 WORKDIR)
 # ==========================================
 # 【关键修改】直接 clone 到 /afl，而不是先 WORKDIR 再 clone
-RUN git config --global http.proxy http://172.17.0.1:7890 && \
-    git config --global https.proxy http://172.17.0.1:7890 && \
+RUN git config --global http.proxy http://172.17.0.1:7897 && \
+    git config --global https.proxy http://172.17.0.1:7897 && \
     git clone https://github.com/xxy20010505-hash/afl-MlpAco.git /afl && \
     git config --global --unset http.proxy && \
     git config --global --unset https.proxy
