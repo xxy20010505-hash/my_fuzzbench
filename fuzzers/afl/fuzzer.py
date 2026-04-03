@@ -143,7 +143,11 @@ def stats_to_csv_syncer(src_path, dst_path):
         # 每 60 秒同步一次
         time.sleep(60)
 
-
+# [关键修复] 告诉 FuzzBench 真正的语料保存在哪里
+def get_sync_dir(output_corpus):
+    """Returns the sync dir for the fuzzer."""
+    return os.path.join(output_corpus, 'queue')
+    
 def run_afl_fuzz(input_corpus,
                  output_corpus,
                  target_binary,
