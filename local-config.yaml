@@ -3,10 +3,9 @@ trials: 10
 
 # 每次实验运行时间 (单位：秒)
 # 建议先设为 600 (10分钟)，验证流程跑通后再加长
-max_total_time: 86400
-
+max_total_time: 43200
 # 采样频率：每 15 分钟 (900秒) 记录一次数据
-snapshot_period: 600
+snapshot_period: 300
 
 # Docker 仓库地址 (本地实验通常忽略此项，但保持默认即可)
 docker_registry: gcr.io/fuzzbench
