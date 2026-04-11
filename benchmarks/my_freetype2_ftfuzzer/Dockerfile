@@ -36,43 +36,13 @@ RUN apt-get update && \
     libbz2-dev
 
 # ==========================================
-# 2. 拉取源码 (针对性修复)
+# 2. 拉取源码 (清理了重复克隆，修复子模块超时)
 # ==========================================
-# 配置 Git 代理
+# 配置 Git 代理与网络优化
 RUN git config --global http.proxy http://172.17.0.1:7897 && \
     git config --global https.proxy http://172.17.0.1:7897 && \
-    # 【核心修复 1】强制使用 HTTP/1.1，解决 "curl 16 Error in the HTTP2 framing layer"
     git config --global http.version HTTP/1.1 && \
-    # 【核心修复 2】增大缓存区，防止大文件传输中断
     git config --global http.postBuffer 524288000
-    
-# 【最关键修改】：克隆完主仓库后，立刻切进去把子模块 (dlg) 给拉下来！
-RUN git clone --depth 1 https://github.com/freetype/freetype.git freetype2 && \
-    cd freetype2 && \
-    git submodule update --init --recursive
 
-# 【核心修复 3】加入 --depth 1，只拉取最新提交，将下载量减少 90%
-RUN git clone --depth 1 https://github.com/freetype/freetype.git freetype2
-
-# 拉取测试用例 (同样加 --depth 1)
-RUN git clone --depth 1 https://github.com/unicode-org/text-rendering-tests.git TRT
-
-# 拉取依赖库
-RUN wget https://github.com/libarchive/libarchive/releases/download/v3.4.3/libarchive-3.4.3.tar.xz
-
-# 清理配置
-RUN git config --global --unset http.proxy && \
-    git config --global --unset https.proxy && \
-    git config --global --unset http.version && \
-    git config --global --unset http.postBuffer
-
-# ==========================================
-# 3. 复制构建脚本
-# ==========================================
-COPY * $SRC/
-
-# ==========================================
-# 4. 清理环境变量
-# ==========================================
-ENV http_proxy=""
-ENV https_proxy=""
+# 克隆主仓库并立即拉取子模块
+RUN git clone --depth 1 https
