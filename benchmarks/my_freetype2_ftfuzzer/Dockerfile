@@ -45,6 +45,11 @@ RUN git config --global http.proxy http://172.17.0.1:7897 && \
     git config --global http.version HTTP/1.1 && \
     # 【核心修复 2】增大缓存区，防止大文件传输中断
     git config --global http.postBuffer 524288000
+    
+# 【最关键修改】：克隆完主仓库后，立刻切进去把子模块 (dlg) 给拉下来！
+RUN git clone --depth 1 https://github.com/freetype/freetype.git freetype2 && \
+    cd freetype2 && \
+    git submodule update --init --recursive
 
 # 【核心修复 3】加入 --depth 1，只拉取最新提交，将下载量减少 90%
 RUN git clone --depth 1 https://github.com/freetype/freetype.git freetype2
