@@ -45,4 +45,32 @@ RUN git config --global http.proxy http://172.17.0.1:7897 && \
     git config --global http.postBuffer 524288000
 
 # 克隆主仓库并立即拉取子模块
-RUN git clone --depth 1 https
+RUN git clone --depth 1 https://github.com/freetype/freetype.git freetype2 && \
+    cd freetype2 && \
+    git submodule update --init --recursive
+
+# 拉取测试用例
+RUN git clone --depth 1 https://github.com/unicode-org/text-rendering-tests.git TRT
+
+# 拉取依赖库
+RUN wget https://github.com/libarchive/libarchive/releases/download/v3.4.3/libarchive-3.4.3.tar.xz
+
+# 加入国内镜像源兜底，防止后续 build.sh 中的 git 操作超时
+RUN git config --global url."https://kkgithub.com/".insteadOf "https://github.com/"
+
+# 清理配置 (保留 url.insteadOf 作为护身符)
+RUN git config --global --unset http.proxy && \
+    git config --global --unset https.proxy && \
+    git config --global --unset http.version && \
+    git config --global --unset http.postBuffer
+
+# ==========================================
+# 3. 复制构建脚本
+# ==========================================
+COPY * $SRC/
+
+# ==========================================
+# 4. 清理环境变量
+# ==========================================
+ENV http_proxy=""
+ENV https_proxy=""
