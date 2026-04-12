@@ -17,14 +17,17 @@
 FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d55caf18e7aa131346fc582a2034fdd
 
 # ==========================================
-# 1. 基础依赖 (保持不变)
+# 1. 基础依赖 (替换国内镜像源，修复 502 Bad Gateway)
 # ==========================================
 ENV http_proxy=http://172.17.0.1:7897
 ENV https_proxy=http://172.17.0.1:7897
 
-RUN apt-get update && \
+# 核心修复：一键替换 Ubuntu 默认源为清华大学镜像源，并加上 --fix-missing 提高容错率
+RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+    apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y \
+    apt-get install -y --fix-missing \
     make \
     autoconf \
     automake \
