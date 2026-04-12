@@ -58,8 +58,6 @@ RUN git clone https://github.com/unicode-org/text-rendering-tests.git TRT
 # 拉取依赖库
 RUN wget https://github.com/libarchive/libarchive/releases/download/v3.4.3/libarchive-3.4.3.tar.xz
 
-# 加入国内镜像源兜底，防止后续 build.sh 中的 git 操作超时
-RUN git config --global url."https://kkgithub.com/".insteadOf "https://github.com/"
 
 # 清理配置 (保留 url.insteadOf 作为护身符)
 RUN git config --global --unset http.proxy && \
