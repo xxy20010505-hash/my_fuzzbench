@@ -48,12 +48,12 @@ RUN git config --global http.proxy http://172.17.0.1:7897 && \
     git config --global http.postBuffer 524288000
 
 # 克隆主仓库并立即拉取子模块
-RUN git clone --depth 1 https://github.com/freetype/freetype.git freetype2 && \
+RUN git clone https://github.com/freetype/freetype.git freetype2 && \
     cd freetype2 && \
     git submodule update --init --recursive
 
 # 拉取测试用例
-RUN git clone --depth 1 https://github.com/unicode-org/text-rendering-tests.git TRT
+RUN git clone https://github.com/unicode-org/text-rendering-tests.git TRT
 
 # 拉取依赖库
 RUN wget https://github.com/libarchive/libarchive/releases/download/v3.4.3/libarchive-3.4.3.tar.xz
