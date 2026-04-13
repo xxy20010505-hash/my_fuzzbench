@@ -17,14 +17,9 @@
 FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d55caf18e7aa131346fc582a2034fdd
 
 # ==========================================
-# 1. 基础环境
+# 1. 基础依赖 (绝对直连模式)
 # ==========================================
-# 【修正】统一使用 7897 端口，确保全局代理生效
-ENV http_proxy=http://172.17.0.1:7897
-ENV https_proxy=http://172.17.0.1:7897
-
-# 换源 + 安装依赖
-# 【核心修复 1】彻底移除 99proxy 强制代理，让 apt 直连阿里云镜像源
+# 【核心修复】：在这里绝对不写 ENV proxy，让 apt-get 以纯粹的本地网络直连阿里云
 RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
@@ -33,8 +28,12 @@ RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && 
     zip
 
 # ==========================================
-# 2. 准备源码
+# 2. 开启全局代理 & 准备源码
 # ==========================================
+# apt 安装完毕后，我们再注入代理，供后面的组件使用
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
+
 # 配置 Git 代理与优化
 RUN git config --global http.proxy http://172.17.0.1:7897 && \
     git config --global https.proxy http://172.17.0.1:7897 && \
@@ -45,7 +44,7 @@ RUN git config --global http.proxy http://172.17.0.1:7897 && \
 RUN git clone --depth 1 --branch v1.2.13 https://github.com/madler/zlib.git $SRC/zlib
 
 # (B) 克隆 Libpng 
-# 【核心修复 2】移除 --depth 1，保留完整历史，防止 FuzzBench 回退代码时失败
+# 保留完整历史，防止 FuzzBench 回退代码时失败
 RUN git clone https://github.com/glennrp/libpng.git $SRC/libpng
 
 # 恢复 Git 配置
@@ -59,14 +58,14 @@ RUN git config --global --unset http.proxy && \
 # ==========================================
 WORKDIR $SRC/libpng
 
-# 复制我们在 Step 1 创建的 build.sh
+# 复制 build.sh
 COPY build.sh $SRC/build.sh
 RUN chmod +x $SRC/build.sh
 
 # ==========================================
-# 4. 字典与清理
+# 4. 字典与种子
 # ==========================================
-# 顶部的 ENV 代理在这里会起作用，确保能连上 raw.githubusercontent.com
+# 刚才在 Step 2 注入的 ENV 代理在这里会起作用，确保能连上 raw.githubusercontent.com
 RUN wget --no-check-certificate -qO $SRC/libpng_read_fuzzer.dict \
     https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/png.dict
 
@@ -74,7 +73,7 @@ ADD seeds /opt/seeds
 COPY * $SRC/
 
 # ==========================================
-# 5. 清理
+# 5. 清理代理，保持镜像纯净
 # ==========================================
 ENV http_proxy=""
 ENV https_proxy=""

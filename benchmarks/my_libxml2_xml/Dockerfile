@@ -14,66 +14,68 @@
 #
 ################################################################################
 
+# 使用官方基础镜像
 FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d55caf18e7aa131346fc582a2034fdd
 
 # ==========================================
 # 1. 基础依赖 (绝对直连模式)
 # ==========================================
-# 【核心修复】：在这里绝对不写 ENV proxy，让 apt-get 以纯粹的本地网络直连阿里云
-RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+# 【核心修复】：强行清除环境变量代理，换源并直连阿里云，完美避开 502 报错
+# 安装构建依赖 (保留了 gnome-common 和 python-dev)
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y --fix-missing \
-    make autoconf automake libtool zlib1g-dev pkg-config \
-    zip
+    apt-get install -y --no-install-recommends --fix-missing \
+        make autoconf libtool pkg-config \
+        zlib1g-dev zlib1g-dev:i386 liblzma-dev liblzma-dev:i386 \
+        gnome-common python-dev
 
 # ==========================================
-# 2. 开启全局代理 & 准备源码
+# 2. 开启全局代理 & 安装 Automake
 # ==========================================
-# apt 安装完毕后，我们再注入代理，供后面的组件使用
+# apt 安装完毕后，注入 172 代理，供后续 curl 和 git 翻墙使用
 ENV http_proxy=http://172.17.0.1:7897
 ENV https_proxy=http://172.17.0.1:7897
 
-# 配置 Git 代理与优化
+RUN curl -LO http://mirrors.kernel.org/ubuntu/pool/main/a/automake-1.16/automake_1.16.5-1.3_all.deb && \
+    apt install -y ./automake_1.16.5-1.3_all.deb && \
+    rm ./automake_1.16.5-1.3_all.deb
+
+# ==========================================
+# 3. 拉取源码 (修复路径与版本回退问题)
+# ==========================================
+# 配置 Git 代理与大文件传输优化
 RUN git config --global http.proxy http://172.17.0.1:7897 && \
     git config --global https.proxy http://172.17.0.1:7897 && \
     git config --global http.version HTTP/1.1 && \
     git config --global http.postBuffer 524288000
 
-# (A) 克隆 Zlib (带版本号分支，使用 depth 1 是安全的)
-RUN git clone --depth 1 --branch v1.2.13 https://github.com/madler/zlib.git $SRC/zlib
+# 【关键修复】
+# 1. 明确指定克隆到 /src/libxml2
+# 2. 移除了 --depth 1 和 --branch 限制。全量克隆能保证 FuzzBench 无论如何都能成功回退到旧版本的 commit。
+RUN git clone https://gitlab.gnome.org/GNOME/libxml2.git /src/libxml2
 
-# (B) 克隆 Libpng 
-# 保留完整历史，防止 FuzzBench 回退代码时失败
-RUN git clone https://github.com/glennrp/libpng.git $SRC/libpng
-
-# 恢复 Git 配置
+# 清理 Git 代理配置
 RUN git config --global --unset http.proxy && \
     git config --global --unset https.proxy && \
     git config --global --unset http.version && \
     git config --global --unset http.postBuffer
 
 # ==========================================
-# 3. 注入构建脚本
+# 4. 配置工作目录与构建脚本
 # ==========================================
-WORKDIR $SRC/libpng
+# 强制设置工作目录，确保 build.sh 运行时就在这里
+WORKDIR /src/libxml2
 
-# 复制 build.sh
-COPY build.sh $SRC/build.sh
-RUN chmod +x $SRC/build.sh
+# 复制 FuzzBench 提供的 build.sh
+COPY build.sh $SRC/
 
-# ==========================================
-# 4. 字典与种子
-# ==========================================
-# 刚才在 Step 2 注入的 ENV 代理在这里会起作用，确保能连上 raw.githubusercontent.com
-RUN wget --no-check-certificate -qO $SRC/libpng_read_fuzzer.dict \
-    https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/png.dict
-
-ADD seeds /opt/seeds
-COPY * $SRC/
+# 【调试】打印一下目录内容，如果构建失败，看日志里有没有 autogen.sh
+RUN echo "Checking directory content:" && ls -la /src/libxml2
 
 # ==========================================
-# 5. 清理代理，保持镜像纯净
+# 5. 清理环境变量
 # ==========================================
 ENV http_proxy=""
 ENV https_proxy=""
