@@ -17,55 +17,37 @@
 FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d55caf18e7aa131346fc582a2034fdd
 
 # ==========================================
-# 1. 网络配置 (只加代理和换源)
+# 1. 网络配置与依赖 (绝对直连模式)
 # ==========================================
-ENV http_proxy=http://172.17.0.1:7897
-ENV https_proxy=http://172.17.0.1:7897
-
-# 换阿里云源
-RUN echo 'Acquire::http::Proxy "http://172.17.0.1:7897";' > /etc/apt/apt.conf.d/99proxy && \
-    echo 'Acquire::https::Proxy "http://172.17.0.1:7897";' >> /etc/apt/apt.conf.d/99proxy && \
+# 【核心修复】：加上 unset 结界强行清空代理，让 apt-get 纯粹直连阿里云，完美避开 502
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
     sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y \
+    apt-get install -y --fix-missing \
     autoconf \
     automake \
     make \
     wget \
     libtool \
-    pkg-config && \
-    rm /etc/apt/apt.conf.d/99proxy
+    pkg-config
 
 # ==========================================
-# 2. 拉取源码 (配合原版 build.sh)
+# 2. 开启全局代理 & 拉取源码
 # ==========================================
+# apt 安装完毕后，再将代理注入环境，供后面的 Git 和 wget 翻墙使用
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
+
+# 配置 Git 代理与大文件传输优化
 RUN git config --global http.proxy http://172.17.0.1:7897 && \
-    git config --global https.proxy http://172.17.0.1:7897
+    git config --global https.proxy http://172.17.0.1:7897 && \
+    git config --global http.version HTTP/1.1 && \
+    git config --global http.postBuffer 524288000
 
-# 【关键】这里我必须加上 git checkout 2023-06-01
-# 原因：原版 build.sh 依赖 'make'。
-# 虽然你看到 GitHub 上可能有 Makefile，但 master 分支现在默认走 CMake/Bazel 流程，
-# 只有切回 2023-06-01 才能保证根目录原本的 Makefile 逻辑 100% 跑通。
+# 【关键保留】：全量克隆并回退到旧版 commit，保证原始 build.sh 的 make 命令 100% 跑通
 RUN git clone https://github.com/google/re2.git && \
     cd re2 && \
     git checkout 2023-06-01
 
-RUN git config --global --unset http.proxy && \
-    git config --global --unset https.proxy
-
-# ==========================================
-# 3. 注入资源
-# ==========================================
-# 保持原版逻辑：字典下载到 $OUT
-RUN wget --no-check-certificate -qO $OUT/fuzzer.dict \
-    https://raw.githubusercontent.com/google/fuzzing/master/dictionaries/regexp.dict
-
-# 保持原版逻辑：文件复制到 $SRC
-# build.sh 在 $SRC 下，所以它运行 'cd re2' 是正确的
-COPY build.sh target.cc $SRC/
-RUN chmod +x $SRC/build.sh
-
-# 清理代理
-ENV http_proxy=""
-ENV https_proxy=""
+# 恢复 Git 默认配置

@@ -17,14 +17,12 @@
 FROM gcr.io/oss-fuzz-base/base-builder@sha256:87ca1e9e19235e731fac8de8d1892ebe8d55caf18e7aa131346fc582a2034fdd
 
 # ==========================================
-# 1. 基础依赖 (替换国内镜像源，修复 502 Bad Gateway)
+# 1. 基础依赖 (绝对直连模式)
 # ==========================================
-ENV http_proxy=http://172.17.0.1:7897
-ENV https_proxy=http://172.17.0.1:7897
-
-# 核心修复：一键替换 Ubuntu 默认源为清华大学镜像源，并加上 --fix-missing 提高容错率
-RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
-    sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+# 【核心修复】：强行清除可能渗透进来的代理，直连阿里云镜像源，完美避开 502
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --fix-missing \
@@ -39,15 +37,19 @@ RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/source
     libbz2-dev
 
 # ==========================================
-# 2. 拉取源码 (清理了重复克隆，修复子模块超时)
+# 2. 开启全局代理 & 拉取源码
 # ==========================================
-# 配置 Git 代理与网络优化
+# apt 安装完毕后，再将代理注入环境，供后面的 Git 和 wget 翻墙使用
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
+
+# 配置 Git 代理与网络大文件优化
 RUN git config --global http.proxy http://172.17.0.1:7897 && \
     git config --global https.proxy http://172.17.0.1:7897 && \
     git config --global http.version HTTP/1.1 && \
     git config --global http.postBuffer 524288000
 
-# 克隆主仓库并立即拉取子模块
+# 克隆主仓库并立即拉取子模块 (保留完整历史，防止 checkout 报错)
 RUN git clone https://github.com/freetype/freetype.git freetype2 && \
     cd freetype2 && \
     git submodule update --init --recursive
@@ -55,11 +57,10 @@ RUN git clone https://github.com/freetype/freetype.git freetype2 && \
 # 拉取测试用例
 RUN git clone https://github.com/unicode-org/text-rendering-tests.git TRT
 
-# 拉取依赖库
+# 拉取依赖库 (wget 会自动走上面设置的 ENV 代理)
 RUN wget https://github.com/libarchive/libarchive/releases/download/v3.4.3/libarchive-3.4.3.tar.xz
 
-
-# 清理配置 (保留 url.insteadOf 作为护身符)
+# 恢复 Git 默认配置
 RUN git config --global --unset http.proxy && \
     git config --global --unset https.proxy && \
     git config --global --unset http.version && \
