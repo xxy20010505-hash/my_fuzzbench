@@ -3,13 +3,14 @@ ARG parent_image
 FROM $parent_image
 
 # ==========================================
-# 1. 代理与依赖
+# 1. 基础依赖 (绝对直连模式)
 # ==========================================
-ENV http_proxy=http://172.17.0.1:7897
-ENV https_proxy=http://172.17.0.1:7897
-
-RUN apt-get update && \
-    apt-get install -y \
+# 【核心修复】：强行清除环境变量代理，换源并直连阿里云，完美避开 502 报错
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --fix-missing \
     wget git make \
     clang-10 llvm-10 llvm-10-dev \
     libc++-dev libc++abi-dev \
@@ -17,7 +18,19 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # ==========================================
-# 2. 环境标准化
+# 2. 注入全局代理 & 配置 Git
+# ==========================================
+# apt-get 跑完后，再注入代理，供后面的 Git 和 wget 翻墙使用
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
+
+RUN git config --global http.proxy http://172.17.0.1:7897 && \
+    git config --global https.proxy http://172.17.0.1:7897 && \
+    git config --global http.version HTTP/1.1 && \
+    git config --global http.postBuffer 524288000
+
+# ==========================================
+# 3. 环境标准化
 # ==========================================
 RUN rm -rf /usr/local/include/llvm && \
     rm -f /usr/local/bin/llvm-config && \
@@ -30,14 +43,20 @@ RUN rm -rf /usr/local/include/llvm && \
     ln -sf /usr/bin/llvm-link-10 /usr/bin/llvm-link
 
 # ==========================================
-# 3. 拉取源码
+# 4. 拉取源码
 # ==========================================
 RUN git clone https://github.com/puppet-meteor/MOpt-AFL /afl && \
     cd /afl && \
     git checkout 45b9f38d2d8b699fd571cfde1bf974974339a21e
 
+# 恢复 Git 默认配置
+RUN git config --global --unset http.proxy && \
+    git config --global --unset https.proxy && \
+    git config --global --unset http.version && \
+    git config --global --unset http.postBuffer
+
 # ==========================================
-# 4. 编译 MOpt
+# 5. 编译 MOpt (保持原版逻辑)
 # ==========================================
 RUN cd /afl/MOpt && \
     CC=clang CXX=clang++ AFL_NO_X86=1 make && \
@@ -56,7 +75,7 @@ RUN cd /afl/MOpt && \
     # 链接
     ln -sf afl-clang-fast afl-clang-fast++ && \
     # -------------------------------------------------------------------
-    # (G) 归位与兼容性修复 (关键修改)
+    # (G) 归位与兼容性修复
     # -------------------------------------------------------------------
     # 1. 编译器放到系统目录
     cp afl-clang-fast /usr/bin/afl-clang-fast && \
@@ -64,8 +83,7 @@ RUN cd /afl/MOpt && \
     # 2. 插件和运行时放回 AFL_PATH
     cp afl-llvm-pass.so /afl/MOpt/afl-llvm-pass.so && \
     cp afl-llvm-rt.o /afl/MOpt/afl-llvm-rt.o && \
-    # 3. 【核心修复】创建软链接，欺骗 fuzzer.py
-    # 程序去 /afl/afl-fuzz 找时，实际会指向 /afl/MOpt/afl-fuzz
+    # 3. 创建软链接，欺骗 fuzzer.py
     ln -sf /afl/MOpt/afl-fuzz /afl/afl-fuzz && \
     ln -sf /afl/MOpt/afl-showmap /afl/afl-showmap && \
     ln -sf /afl/MOpt/afl-tmin /afl/afl-tmin && \
@@ -74,7 +92,7 @@ RUN cd /afl/MOpt && \
     cp /afl/MOpt/afl-fuzz /usr/bin/fuzz
 
 # ==========================================
-# 5. 编译 Driver
+# 6. 编译 Driver (保持原版逻辑)
 # ==========================================
 RUN cd /afl/MOpt && \
     wget https://raw.githubusercontent.com/llvm/llvm-project/5feb80e748924606531ba28c97fe65145c65372e/compiler-rt/lib/fuzzer/afl/afl_driver.cpp -O /afl/MOpt/afl_driver.cpp && \
@@ -83,7 +101,7 @@ RUN cd /afl/MOpt && \
     ar r /libAFL.a /afl/MOpt/afl_driver.o /afl/MOpt/afl-llvm-rt.o
 
 # ==========================================
-# 6. 环境变量
+# 7. 环境变量
 # ==========================================
 ENV AFL_PATH=/afl/MOpt
 ENV CC=/usr/bin/afl-clang-fast

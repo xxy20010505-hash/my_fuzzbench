@@ -14,16 +14,24 @@
 
 FROM gcr.io/fuzzbench/base-image
 
-# 必须再次设置代理，因为 Runner 构建是独立的阶段
-ENV http_proxy=http://172.17.0.1:7897
-ENV https_proxy=http://172.17.0.1:7897
-
-# 安装运行时缺失的库：libc++1 和 libc++abi1
-RUN apt-get update && apt-get install -y \
+# ==========================================
+# 1. 基础依赖 (绝对直连模式)
+# ==========================================
+# 【核心修复】：强行清除前置环境可能渗透进来的代理，完全直连清华源，避开 502
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends --fix-missing \
     libc++1 \
-    libc++abi1 \
-    && rm -rf /var/lib/apt/lists/*
+    libc++abi1 && \
+    rm -rf /var/lib/apt/lists/*
 
-# 清除代理
-ENV http_proxy=""
-ENV https_proxy=""
+# ==========================================
+# 2. 恢复全局运行时代理与白名单
+# ==========================================
+# apt-get 安全跑完后，再把代理加回来
+# 保障容器在正式跑实验时，FuzzBench 的 Python 脚本如果需要联网上报状态，可以顺利翻墙
+ENV http_proxy=http://172.17.0.1:7897 \
+    https_proxy=http://172.17.0.1:7897 \
+    no_proxy="localhost,127.0.0.1,.tsinghua.edu.cn,.aliyun.com"

@@ -3,13 +3,14 @@ ARG parent_image
 FROM $parent_image
 
 # ==========================================
-# 1. 代理与依赖 (保持不变)
+# 1. 基础依赖 (绝对直连模式)
 # ==========================================
-ENV http_proxy=http://172.17.0.1:7897
-ENV https_proxy=http://172.17.0.1:7897
-
-RUN apt-get update && \
-    apt-get install -y \
+# 【核心修复】：强行清除环境变量代理，换源并直连阿里云，完美避开 502 报错
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --fix-missing \
     wget git make \
     clang-10 llvm-10 llvm-10-dev \
     libc++-dev libc++abi-dev \
@@ -17,7 +18,19 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # ==========================================
-# 2. 环境标准化 (保持不变)
+# 2. 注入全局代理 & 配置 Git
+# ==========================================
+# apt-get 跑完后，再注入代理，供后面的 Git 和 wget 翻墙使用
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
+
+RUN git config --global http.proxy http://172.17.0.1:7897 && \
+    git config --global https.proxy http://172.17.0.1:7897 && \
+    git config --global http.version HTTP/1.1 && \
+    git config --global http.postBuffer 524288000
+
+# ==========================================
+# 3. 环境标准化 (保持不变)
 # ==========================================
 RUN rm -rf /usr/local/include/llvm && \
     rm -f /usr/local/bin/llvm-config && \
@@ -30,14 +43,20 @@ RUN rm -rf /usr/local/include/llvm && \
     ln -sf /usr/bin/llvm-link-10 /usr/bin/llvm-link
 
 # ==========================================
-# 3. 拉取 AFLFast 源码 (保持不变)
+# 4. 拉取 AFLFast 源码 (保持不变)
 # ==========================================
 RUN git clone https://github.com/mboehme/aflfast.git /afl && \
     cd /afl && \
     git checkout d1d54caf9850ca4afe2ac634a2a212aa6bb40032
 
+# 恢复 Git 默认配置
+RUN git config --global --unset http.proxy && \
+    git config --global --unset https.proxy && \
+    git config --global --unset http.version && \
+    git config --global --unset http.postBuffer
+
 # ==========================================
-# 4. 手动编译 AFLFast (保持不变)
+# 5. 手动编译 AFLFast (保持不变)
 # ==========================================
 RUN cd /afl && \
     CC=clang CXX=clang++ AFL_NO_X86=1 make && \
@@ -59,7 +78,7 @@ RUN cd /afl && \
     chmod +x /usr/bin/afl-clang-fast /usr/bin/afl-clang-fast++ /usr/bin/fuzz
 
 # ==========================================
-# 5. 编译 Driver (修正此处)
+# 6. 编译 Driver (修正此处 - 保留你的硬核修复)
 # ==========================================
 RUN cd /afl && \
     wget https://raw.githubusercontent.com/llvm/llvm-project/5feb80e748924606531ba28c97fe65145c65372e/compiler-rt/lib/fuzzer/afl/afl_driver.cpp -O /afl/afl_driver.cpp && \
@@ -77,7 +96,7 @@ RUN cd /afl && \
     ar r /libAFL.a /afl/afl_driver.o /afl/afl-llvm-rt.o
 
 # ==========================================
-# 6. 环境变量
+# 7. 环境变量
 # ==========================================
 ENV AFL_PATH=/afl
 ENV CC=/usr/bin/afl-clang-fast
