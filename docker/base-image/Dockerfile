@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-# http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,21 +14,18 @@
 
 FROM ubuntu:focal
 
-# (保留前面的 FROM 语句)
-FROM ubuntu:20.04
-
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHON_VERSION=3.10.8
 
 # =================================================================
-# 【新增】使用阿里云镜像源，解决 502 Bad Gateway 和下载慢的问题
+# 1. 基础系统依赖 (完全直连阿里云，彻底消灭 502)
 # =================================================================
-RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
-
-# Install dependencies required by Python3 or Pip3.
-RUN apt-get update && \
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y \
+    apt-get install -y --fix-missing \
     curl \
     xz-utils \
     build-essential \
@@ -39,24 +36,13 @@ RUN apt-get update && \
     libbz2-dev \
     liblzma-dev
 
-# (保留后面的内容)ENV DEBIAN_FRONTEND=noninteractive
+# =================================================================
+# 2. 注入代理，加速下载并编译 Python 和 pip 包
+# =================================================================
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
 
-# Python 3.10.8 is not the default version in Ubuntu 20.04 (Focal Fossa).
-ENV PYTHON_VERSION 3.10.8
-# Install dependencies required by Python3 or Pip3.
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y \
-    curl \
-    xz-utils \
-    build-essential \
-    zlib1g-dev \
-    libssl-dev \
-    libffi-dev \
-    libsqlite3-dev \
-    libbz2-dev \
-    liblzma-dev
-
+# 这一步的 curl 会自动使用上面的代理，秒下 Python 源码
 RUN cd /tmp/ && \
     curl -O https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz && \
     tar -xvf Python-$PYTHON_VERSION.tar.xz > /dev/null && \
@@ -70,19 +56,28 @@ RUN cd /tmp/ && \
     ln -s /usr/local/bin/python3 /usr/local/bin/python && \
     ln -s /usr/local/bin/pip3 /usr/local/bin/pip
 
-# Install common python dependencies.
+# Install common python dependencies (走代理下载更快)
 COPY ./requirements.txt /tmp
 RUN pip install -r /tmp/requirements.txt
 
-# Install dependencies required by google-cloud-cli.
-RUN apt-get update && \
-    apt-get install -y \
+# =================================================================
+# 3. 安装额外的 apt 依赖 (必须再次清空代理)
+# =================================================================
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    apt-get update && \
+    apt-get install -y --fix-missing \
     apt-transport-https \
     ca-certificates \
     rsync \
     gnupg
 
-# Install google-cloud-cli (previously named google-cloud-sdk).
+# =================================================================
+# 4. 清理环境变量
+# =================================================================
+ENV http_proxy=""
+ENV https_proxy=""
+
+# (如果你以后需要用到 google-cloud-cli，取消下面的注释即可。目前在本地跑实验不需要它)
 #RUN echo "deb https://packages.cloud.google.com/apt cloud-sdk main" \
 #    | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
 #    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
