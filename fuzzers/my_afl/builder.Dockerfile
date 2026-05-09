@@ -2,17 +2,36 @@ ARG parent_image
 FROM $parent_image
 
 # ==========================================
-# 1. 安装构建依赖
+# 1. 基础依赖 (绝对直连模式)
 # ==========================================
-RUN apt-get update && \
-    apt-get install -y libhiredis-dev make git ca-certificates wget \
+# 【核心修复】：强行清除环境变量代理，换源并直连阿里云，完美避开 apt-get 的 502 报错
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --fix-missing \
+    wget git make ca-certificates \
+    libhiredis-dev \
     clang-12 llvm-12 llvm-12-dev \
     libc++-12-dev libc++abi-12-dev \
     zlib1g-dev \
-    pkg-config libtool automake autoconf
+    pkg-config libtool automake autoconf \
+    && rm -rf /var/lib/apt/lists/*
 
 # ==========================================
-# 2. 环境标准化 (Clang 软链接)
+# 2. 注入全局代理 & 配置 Git
+# ==========================================
+# apt-get 跑完后，再注入代理，供后面的 Git 拉取 Github 源码使用
+ENV http_proxy=http://172.17.0.1:7897
+ENV https_proxy=http://172.17.0.1:7897
+
+RUN git config --global http.proxy http://172.17.0.1:7897 && \
+    git config --global https.proxy http://172.17.0.1:7897 && \
+    git config --global http.version HTTP/1.1 && \
+    git config --global http.postBuffer 524288000
+
+# ==========================================
+# 3. 环境标准化 (Clang 12)
 # ==========================================
 RUN rm -rf /usr/local/include/llvm && \
     rm -f /usr/local/bin/llvm-config && \
@@ -25,19 +44,19 @@ RUN rm -rf /usr/local/include/llvm && \
     ln -sf /usr/bin/llvm-link-12 /usr/bin/llvm-link
 
 # ==========================================
-# 3. 拉取源码 (改用绝对路径，不切换 WORKDIR)
+# 4. 拉取源码
 # ==========================================
-# 【关键修改】直接 clone 到 /afl，而不是先 WORKDIR 再 clone
-RUN git config --global http.proxy http://172.17.0.1:7897 && \
-    git config --global https.proxy http://172.17.0.1:7897 && \
-    git clone https://github.com/xxy20010505-hash/afl-MlpAco.git /afl && \
-    git config --global --unset http.proxy && \
-    git config --global --unset https.proxy
+RUN git clone https://github.com/xxy20010505-hash/afl-MlpAco.git /afl
+
+# 恢复 Git 默认配置，防止代理污染
+RUN git config --global --unset http.proxy && \
+    git config --global --unset https.proxy && \
+    git config --global --unset http.version && \
+    git config --global --unset http.postBuffer
 
 # ==========================================
-# 4. 部署 ONNX
+# 5. 部署 ONNX
 # ==========================================
-# 【关键修改】使用 cd 命令，只在这一行生效
 RUN cd /afl/onnxruntime && \
     (cp -r lib/* /usr/lib/ 2>/dev/null || : ) && \
     (cp *.so* /usr/lib/ 2>/dev/null || : ) && \
@@ -45,17 +64,15 @@ RUN cd /afl/onnxruntime && \
     ldconfig
 
 # ==========================================
-# 5. 编译 AFL 核心
+# 6. 编译 AFL 核心
 # ==========================================
-# 【关键修改】cd /afl 进去编译
 RUN cd /afl && \
     make clean && \
     CFLAGS= CXXFLAGS= AFL_NO_X86=1 make CC=clang CXX=clang++
 
 # ==========================================
-# 6. 编译 LLVM Mode
+# 7. 编译 LLVM Mode
 # ==========================================
-# 【关键修改】全程使用绝对路径 + cd，不使用 WORKDIR
 RUN cd /afl/llvm_mode && \
     clang-12 -O3 -Wall -g -Wno-pointer-sign \
       -DAFL_PATH=\"/afl\" -DBIN_PATH=\"/usr/bin\" -DVERSION=\"2.57b\" \
@@ -68,15 +85,14 @@ RUN cd /afl/llvm_mode && \
     ln -sf afl-clang-fast afl-clang-fast++
 
 # ==========================================
-# 7. 制作 libAFL.a
+# 8. 制作 libAFL.a
 # ==========================================
-# 【关键修改】目标路径明确，不依赖当前目录
 COPY afl_driver.cpp /afl/afl_driver.cpp
 RUN clang++-12 -stdlib=libc++ -std=c++11 -O2 -c /afl/afl_driver.cpp -o afl_driver.o && \
     ar r /libAFL.a afl_driver.o
 
 # ==========================================
-# 8. 归位与安装
+# 9. 归位与安装
 # ==========================================
 RUN cp /afl/llvm_mode/afl-llvm-pass.so /afl/ && \
     cp /afl/llvm_mode/afl-llvm-rt.o /afl/ && \
@@ -85,7 +101,7 @@ RUN cp /afl/llvm_mode/afl-llvm-pass.so /afl/ && \
     cp /afl/llvm_mode/afl-clang-fast++ /usr/bin/afl-clang-fast++
 
 # ==========================================
-# 9. 环境变量
+# 10. 环境变量与清理代理
 # ==========================================
 ENV AFL_PATH=/afl
 ENV AFL_CC=clang
@@ -93,3 +109,7 @@ ENV AFL_CXX=clang++
 ENV CC=/usr/bin/afl-clang-fast
 ENV CXX=/usr/bin/afl-clang-fast++
 ENV FUZZER_LIB=/libAFL.a
+
+# 【核心修复】：最后彻底清除 Docker 容器的全局代理，保证 FuzzBench 运行阶段的内部网络（如 Redis 互联）不受干扰
+ENV http_proxy=""
+ENV https_proxy=""
