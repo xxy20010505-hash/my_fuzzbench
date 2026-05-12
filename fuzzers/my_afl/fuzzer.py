@@ -142,7 +142,7 @@ def run_afl_fuzz(input_corpus, output_corpus, target_binary, additional_flags=No
             '-i', input_corpus,
             '-o', output_corpus,
             '-m', 'none',
-            '-t', '2000', # Timeout 2000ms
+            '-t', '2000+', # Timeout 2000ms
             '-d'
         ]
 
