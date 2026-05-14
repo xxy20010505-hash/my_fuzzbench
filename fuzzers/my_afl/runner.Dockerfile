@@ -1,17 +1,19 @@
 FROM gcr.io/fuzzbench/base-image
 
 # ==========================================
-# 1. 安装系统运行库 (绝对直连 + PPA 独立代理)
+# 1. 安装系统运行库 (彻底抛弃脆弱的 add-apt-repository)
 # ==========================================
 # 【专家修正】：移除头部的全局 ENV 代理。Ubuntu 基础源换为阿里云直连。
 RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
     sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends software-properties-common && \
-    # 【关键打击】：Launchpad PPA 的 GPG 密钥服务器经常被墙，仅在这一行命令单独注入代理！
+    # 增加安装 curl 和 gnupg2 用于后续拉取密钥
+    apt-get install -y --no-install-recommends software-properties-common curl gnupg2 && \
+    # 【专家级修复】直接通过 keyserver 拉取 PPA 公钥并硬编码源地址，彻底避开 Launchpad 官网的 API 阻断
     http_proxy=http://172.17.0.1:7897 https_proxy=http://172.17.0.1:7897 \
-    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    curl -sL "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x60C317803A41BA51845E371A1E9377A2BA9EF27F" | apt-key add - && \
+    echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu focal main" > /etc/apt/sources.list.d/ubuntu-toolchain-r.list && \
     apt-get update && \
     # 基础依赖安装，享受国内镜像直连的满速
     apt-get install -y --no-install-recommends \
